@@ -15,6 +15,7 @@ import torch
 import math
 import os
 import cv2
+from scipy import misc
 
 class TrainDataset(Dataset):
     def __init__(self,txt_path=None,transform=None,flip=False):
@@ -23,90 +24,46 @@ class TrainDataset(Dataset):
         self.flip = flip
         self.batch_count = 0
         self.img_size = 320
-        self.name_list=[]
-        self.bbox = []
-        self.landmarks=[]
-        path1="/versa/elvishelvis/RetinaFace_Pytorch/CelebA/Anno/list_bbox_celeba.txt"
-        # for the bbox
-        f = open(path1,'r')
-        f.readline()
-        f.readline()
-        lines = f.readlines()
-        for line in lines:
-            self.name_list.append(line[0:10])
-            count=0
-            begin=11
-            temp=[]
-            is_first=False
-            while (count<4):
-                while(line[begin]==" "):
-                    begin+=1
-                cur=begin
-                while(line[cur]!=" " and line[cur]!='\n'):
-                    cur+=1
-                temp.append(line[begin:cur])
-                is_first=True
-                begin=cur
-                count+=1
-            self.bbox.append(temp)
-
-        path2="/versa/elvishelvis/RetinaFace_Pytorch/CelebA/Anno/list_landmarks_celeba.txt"
-        k = open(path2,'r')
-        k.readline()
-        k.readline()
-        lines = k.readlines()
-        for line in lines:
-            count=0
-            begin=11
-            temp=[]
-            is_first=False
-            while (count<10):
-                while(line[begin]==" "):
-                    begin+=1
-                cur=begin
-                while(line[cur]!=" " and line[cur]!='\n'):
-                    cur+=1
-                temp.append(line[begin:cur])
-                is_first=True
-                begin=cur
-                count+=1
-            self.landmarks.append(temp)
 
     def __len__(self):
-        return len(self.name_list)   
-        # return 2000
-        # return 3
+        # return len(self.name_list)   
+        return 22986
+        # return 10
 
     def __getitem__(self,index):
-        index=random.randint(1,len(self.name_list)-1)
-        img = skimage.io.imread("/versa/elvishelvis/RetinaFace_Pytorch/\
-CelebA/Img/img_celeba.7z/img_celeba/"+str(self.name_list[index]))
+        index+=1
+        img = cv2.imread("/versa/elvishelvis/landmarks56/new_dataset/{}.jpg".format(index))
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         #img = img.astype(np.float32)/255.0
 
-        box_ = self.bbox[index]
-        land_=self.landmarks[index]
-        annotations = np.zeros((0, 14))
-        if len(box_) == 0:
-            return annotations
-        annotation = np.zeros((1,14))
+        annotations = np.zeros((0, 4+136))
+        annotation = np.zeros((1,140))
+        landmark=[]
+        minx=float('inf')
+        miny=float('inf')
+        maxx=0
+        maxy=0
+        path="/versa/elvishelvis/landmarks56/new_dataset/{}.pth".format(index)
+        data=np.array(torch.load(path))
+        for da in data:
+            if(da[0]<minx):
+                minx=da[0]
+            if(da[0]>maxx):
+                maxx=da[0]
+            if(da[1]<miny):
+                miny=da[1]
+            if(da[1]>maxy):
+                maxy=da[1]
+            landmark.append(da[0])
+            landmark.append(da[1])
         # bbox
-        annotation[0,0] = box_[0]                  # x1
-        annotation[0,1] = box_[1]                  # y1
-        annotation[0,2] = str(int(box_[0]) + int(box_[2]))       # x2
-        annotation[0,3] = str(int(box_[1]) + int(box_[3]))       # y2
+        annotation[0,0] = minx                  # x1
+        annotation[0,1] = miny                  # y1
+        annotation[0,2] = maxx      # x2
+        annotation[0,3] = maxy       # y2
 
-        # landmarks
-        annotation[0,4] = land_[0]                  # l0_x
-        annotation[0,5] = land_[1]                  # l0_y
-        annotation[0,6] = land_[2]                  # l1_x
-        annotation[0,7] = land_[3]                  # l1_y
-        annotation[0,8] = land_[4]                 # l2_x
-        annotation[0,9] = land_[5]                 # l2_y
-        annotation[0,10] = land_[6]                # l3_x
-        annotation[0,11] = land_[7]                # l3_y
-        annotation[0,12] = land_[8]                # l4_x
-        annotation[0,13] = land_[9]                # l4_y
-
+        for i in range(4,140):
+            annotation[0,i] = landmark[i-4]
         annotations = np.append(annotations,annotation,axis=0)
         sample = {'img':torch.tensor(img), 'annot':torch.tensor(annotations)}
         if self.transform is not None:
@@ -138,7 +95,7 @@ def collater(data):
     
     if max_num_annots > 0:
         if annots[0].shape[1] > 4:
-            annot_padded = torch.ones((len(annots), max_num_annots, 14)) * -1
+            annot_padded = torch.ones((len(annots), max_num_annots, 140)) * -1
             for idx, annot in enumerate(annots):
                 if annot.shape[0] > 0:
                     annot_padded[idx, :annot.shape[0], :] = annot
@@ -150,7 +107,7 @@ def collater(data):
                     annot_padded[idx, :annot.shape[0], :] = annot
     else:
         if annots[0].shape[1] > 4:
-            annot_padded = torch.ones((len(annots), 1, 14)) * -1
+            annot_padded = torch.ones((len(annots), 1, 140)) * -1
         else:
             annot_padded = torch.ones((len(annots), 1, 4)) * -1
 
@@ -193,7 +150,7 @@ class RandomCroper(object):
         annots[:,2] -= crop_x
         annots[:,3] -= crop_y
 
-        # relocate landmarks
+        # relocate landmarks56
         if annots.shape[1] > 4:
             # l_mask = annots[:,4]!=-1
             l_mask = annots[:,4] > 0
@@ -226,7 +183,7 @@ class RandomCroper(object):
         # clip bbox
         annots[:,:4] = annots[:,:4].clip(0, input_size)
         
-        # clip landmarks
+        # clip landmarks56
         if annots.shape[1] > 4:
             annots[l_mask,4:] = annots[l_mask,4:].clip(0, input_size)
         
@@ -235,7 +192,7 @@ class RandomCroper(object):
         return {'img': torch.from_numpy(new_image), 'annot': torch.from_numpy(annots)}
 '''
 class RandomFlip(object):
-    def __call__(self, sample, input_size=320, flip_x=0.5):
+    def __call__(self, sample, input_size=320, flip_x=1):
         aaa=np.random.rand()
         if aaa < flip_x:
             image, annots = sample['img'], sample['annot']
@@ -246,23 +203,29 @@ class RandomFlip(object):
             image = image.numpy()
             annots = annots.numpy()
             # relocate bboxes
-            annots[0, 0] = w - annots[0, 0]
-            annots[0, 2] = w - annots[0, 2]
-            annots[0, 0],annots[0, 2]=annots[0, 2],annots[0, 0]
+            for i in range(0,140):
+                if i%2==0:
+                    annots[0, i] = w - annots[0, i]
+            for k in range(0,8):
 
+                annots[0, k*2],annots[0, (16-k)*2]=annots[0, (16-k)*2],annots[0, k*2]
+            for b in range(17,22):
+                annots[0, b*2],annots[0, (43-b)*2]=annots[0, (43-b)*2],annots[0, b*2]
+            for a in range(36,42):
+                annots[0, a*2],annots[0, (81-a)*2]=annots[0, (81-a)*2],annots[0, a*2]
+            for c in range(31,33):
+                annots[0, c*2],annots[0, (66-c)*2]=annots[0, (66-c)*2],annots[0, c*2]
+            # for d in range(31,33):
+            #     annots[0, d*2],annots[0, (81-d)*2]=annots[0, (81-d)*2],annots[0, d*2]
 
-            annots[0, 4] = w - annots[0, 4]
-            annots[0, 6] = w - annots[0, 6]
-            annots[0, 6],annots[0, 4]=annots[0, 4],annots[0, 6]
-            annots[0, 7],annots[0, 5]=annots[0, 5],annots[0, 7]
-
-
-            annots[0, 8] = w - annots[0, 8]
-
-            annots[0, 10] = w - annots[0, 10]
-            annots[0, 12] = w - annots[0, 12]
-            annots[0, 12],annots[0, 10]=annots[0, 10],annots[0, 12]
-            annots[0, 11],annots[0, 13]=annots[0, 13],annots[0, 11]
+            annots[0, 48*2],annots[0, 54*2]=annots[0, 54*2],annots[0, 48*2]
+            annots[0, 49*2],annots[0, 53*2]=annots[0, 53*2],annots[0, 49*2]
+            annots[0, 50*2],annots[0, 52*2]=annots[0, 52*2],annots[0, 50*2]
+            annots[0, 59*2],annots[0, 55*2]=annots[0, 55*2],annots[0, 59*2]
+            annots[0, 58*2],annots[0, 56*2]=annots[0, 56*2],annots[0, 58*2]
+            annots[0, 60*2],annots[0, 64*2]=annots[0, 64*2],annots[0, 60*2]
+            annots[0, 61*2],annots[0, 63*2]=annots[0, 63*2],annots[0, 61*2]
+            annots[0, 67*2],annots[0, 65*2]=annots[0, 65*2],annots[0, 67*2]
 
         
 
@@ -276,7 +239,10 @@ class RandomFlip(object):
 class Resizer(object):
     def __call__(self, sample, input_size=320):
         image, annots = np.array(sample['img']), np.array(sample['annot'][0])
+        # if(len(image.shape)==2):
 
+            # print(image.shape)
+            
         cols, rows,_ = image.shape 
         scalex=input_size/rows
         scaley=input_size/cols
@@ -284,7 +250,7 @@ class Resizer(object):
         # resize image
         resized_image = skimage.transform.resize(image,(320,320))
         resized_image = resized_image * 255
-        for i in range(14):
+        for i in range(140):
             if(i%2==0):
                 annots[i]*=scalex
             else:
@@ -293,7 +259,7 @@ class Resizer(object):
 
 
 class Rotate(object):
-    def __init__(self,angle=[-45,45],p=0.5):
+    def __init__(self,angle=[-45,45],p=1):
         self.angle=angle
         self.p=p
     def __call__(self,sample):
@@ -313,9 +279,11 @@ class Rotate(object):
             rand_num=random.randint(self.angle[0],self.angle[1])
             img=rotate(img,rand_num)
             box=np.array(annots)[0]
-            offsetx=0
-            offsety=0
-            for i in range(4,14):
+            minx=float('inf')
+            miny=float('inf')
+            maxx=0
+            maxy=0
+            for i in range(4,140):
                 if(i%2==0):
                     x_=box[i]
                     y_=box[i+1]
@@ -324,13 +292,18 @@ class Rotate(object):
                     angle=rand_num
                     box[i] = int(x * math.cos(math.radians(angle)) + y * math.sin(math.radians(angle)) + w/2)
                     box[i+1] = int(-x * math.sin(math.radians(angle)) + y * math.cos(math.radians(angle)) + h/2)
-                    offsetx=box[i]-x_
-                    offsety=box[i+1]-y_
-
-            box[0]+=offsetx
-            box[2]+=offsetx
-            box[1]+=offsety
-            box[3]+=offsety
+                    if(box[i]<minx):
+                        minx=box[i]
+                    if(box[i]>maxx):
+                        maxx=box[i]
+                    if(box[i+1]<miny):
+                        miny=box[i+1]
+                    if(box[i+1]>maxy):
+                        maxy=box[i+1]
+            box[0] = minx                  # x1
+            box[1] = miny                  # y1
+            box[2] = maxx      # x2
+            box[3] = maxy 
 
             return {'img': torch.tensor(img), 'annot': torch.tensor(box[np.newaxis,:])}
         return sample
@@ -374,7 +347,7 @@ class PadToSquare(object):
         return {'img': padded_img, 'annot': annots}
 '''
 class RandomErasing(object):
-    def __init__(self,p=0.5):
+    def __init__(self,p=1):
         self.p=p
     def __call__(self, sample):
             if(np.random.rand()<self.p):

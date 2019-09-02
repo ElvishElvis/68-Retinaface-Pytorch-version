@@ -17,16 +17,16 @@ import os
 from torch.utils.data.distributed import DistributedSampler
 import torchvision_model
 
-
+import sys
 def get_args():
     parser = argparse.ArgumentParser(description="Train program for retinaface.")
     parser.add_argument('--batch', type=int, default=16, help='Batch size')
-    parser.add_argument('--epochs', type=int, default=9, help='Max training epochs')
+    parser.add_argument('--epochs', type=int, default=100, help='Max training epochs')
     parser.add_argument('--shuffle', type=bool, default=True, help='Shuffle dataset or not')
     parser.add_argument('--img_size', type=int, default=320, help='Input image size')
     parser.add_argument('--verbose', type=int, default=20, help='Log verbose')
-    parser.add_argument('--save_step', type=int, default=2, help='Save every save_step epochs')
-    parser.add_argument('--eval_step', type=int, default=8, help='Evaluate every eval_step epochs')
+    parser.add_argument('--save_step', type=int, default=5, help='Save every save_step epochs')
+    parser.add_argument('--eval_step', type=int, default=99, help='Evaluate every eval_step epochs')
     parser.add_argument('--save_path', type=str, default='./out', help='Model save path')
     parser.add_argument('--depth', help='Resnet depth, must be one of 18, 34, 50, 101, 152', type=int, default=50)
     args = parser.parse_args()
@@ -45,7 +45,8 @@ def main():
 
     # # writer = SummaryWriter(log_dir=log_path)
 
-    dataset_train = TrainDataset(transform=transforms.Compose([Rotate(),Resizer(),Color()]))
+    # dataset_train = TrainDataset(transform=transforms.Compose([RandomFlip(),RandomErasing(),Rotate(),Resizer(),Color()]))
+    dataset_train = TrainDataset(transform=transforms.Compose([Resizer(),Rotate(),Color()]))
     len_train_set = int(len(dataset_train) * 0.7)
     len_val_set   = len(dataset_train) - len_train_set
 
@@ -59,30 +60,14 @@ def main():
     return_layers = {'layer2':1,'layer3':2,'layer4':3}
     retinaface = torchvision_model.create_retinaface(return_layers)
     retinaface = retinaface.cuda()
-    base_lr=1e-4
-    lr = base_lr
-    optimizer = optim.Adam(retinaface.parameters(), lr=lr)
     retinaface = torch.nn.DataParallel(retinaface).cuda()
     retinaface.training = True
-    # print(type(retinaface))
-    # retinaface.load_state_dict(torch.load("./pretrained.torch"))
-    retinaface.load_state_dict(torch.load("./out/pretrain11111113.pt"))
     
+    # retinaface.load_state_dict(torch.load("./out/mnas_epoch_145.pt"))
+    base_lr=2e-3
+    lr = base_lr
+    optimizer = optim.Adam(retinaface.parameters(), lr=lr)
     
-    # ####
-    # print("not pretrain")
-    # recall, precision, landmakr,miss= eval_widerface.evaluate(dataloader_val,retinaface)
-    # print('Recall:',recall)
-    # print('Precision:',precision)
-    # print("landmark: ",str(landmakr))
-    # print("miss: "+ str(miss))
-    # sdfsdfsdf
-
-    # ###
-
-
-
-
     lr_cos = lambda n: 0.5 * (1 + np.cos((n) / (args.epochs) * np.pi)) * base_lr
     # optimizer = optim.SGD(retinaface.parameters(), lr=1e-2, momentum=0.9, weight_decay=0.0005)
     # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
@@ -105,12 +90,14 @@ def main():
         for iter_num,data in enumerate(dataloader_train):
             optimizer.zero_grad()
             classification_loss, bbox_regression_loss,ldm_regression_loss = retinaface([data['img'].cuda().float(), data['annot']])
-            classification_loss = classification_loss.mean()
+            classification_loss = (classification_loss)**2
+            classification_loss=classification_loss.mean()
+            bbox_regression_loss=bbox_regression_loss**2
             bbox_regression_loss = bbox_regression_loss.mean()
+            ldm_regression_loss=ldm_regression_loss**2
             ldm_regression_loss = ldm_regression_loss.mean()
 
-            # loss = classification_loss + 0.25 * bbox_regression_loss + 0.07 * ldm_regression_loss
-            loss = classification_loss+0.1*ldm_regression_loss
+            loss = classification_loss + 0.25 * bbox_regression_loss + 0.07 * ldm_regression_loss
             # loss = classification_loss + bbox_regression_loss + ldm_regression_loss
 
             loss.backward()
@@ -153,18 +140,10 @@ def main():
 
             # writer.add_scalar('Recall:', recall, epoch*args.eval_step)
             # writer.add_scalar('Precision:', precision, epoch*args.eval_step)
-            with open("aaa.txt", 'a') as f:
-                f.write('-------- RetinaFace Pytorch --------(not pretrain)'+'\n')
-                f.write ('Evaluating epoch {}'.format(epoch)+'\n')
-                f.write('Recall:'+str(recall)+'\n')
-                f.write('Precision:'+str(precision)+'\n')
-                f.write("landmark: "+str(landmakr)+'\n')
-                f.write("miss: "+ str(miss)+'\n')
-                f.close()
 
         # Save model
         if (epoch + 1) % args.save_step == 0:
-            torch.save(retinaface.state_dict(), args.save_path + '/mnas_epoch__ori{}.pt'.format(epoch + 1+5+1112222111))
+            torch.save(retinaface.state_dict(), args.save_path + '/mnas_epoch_{}.pt'.format(epoch + 1))
 
     # writer.close()
 

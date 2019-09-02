@@ -166,11 +166,11 @@ class MnasNet(nn.Module):
         self.conv2 = SepConv_3x3(int(32 * width_mult), int(16 * width_mult), 1)
 
         self.feature = nn.Sequential(
-            self._make_layer(MBConv3_3x3, 1, int(16 * width_mult), int(24 * width_mult), 2),
-            self._make_layer(MBConv3_5x5, 1, int(24 * width_mult), int(48 * width_mult), 2),
-            self._make_layer(MBConv6_5x5, 1, int(48 * width_mult), int(80 * width_mult), 2),
-            self._make_layer(MBConv6_3x3, 1, int(80 * width_mult), int(96 * width_mult), 1),
-            self._make_layer(MBConv6_5x5, 2, int(96 * width_mult), int(192 * width_mult), 2)
+            self._make_layer(MBConv3_3x3, 3, int(16 * width_mult), int(24 * width_mult), 2),
+            self._make_layer(MBConv3_5x5, 3, int(24 * width_mult), int(48 * width_mult), 2),
+            self._make_layer(MBConv6_5x5, 3, int(48 * width_mult), int(80 * width_mult), 2),
+            self._make_layer(MBConv6_3x3, 2, int(80 * width_mult), int(96 * width_mult), 1),
+            self._make_layer(MBConv6_5x5, 4, int(96 * width_mult), int(192 * width_mult), 2)
             # self._make_layer(MBConv6_3x3, 1, int(192 * width_mult), int(320 * width_mult), 1)
         )
 
@@ -207,19 +207,13 @@ class MnasNet(nn.Module):
         x = self.feature(x)
         result=OrderedDict()
         result_list.append(last_fm_list[-1])
-        result[1]=result_list[0]
-        result[2]=result_list[1]
-        result[3]=result_list[2]
+        result[0]=result_list[0]
+        result[1]=result_list[1]
+        result[2]=result_list[2]
         return result
 
 if __name__ == '__main__':
     net = MnasNet(width_mult=0.25)
-    from thop import profile
-    
-    from thop import clever_format
-    # x = torch.randn(1,3,320,320)
-    input = torch.randn(1, 3, 224, 224)
-    flops, params = profile(net, inputs=(input, ))
-    flops, params = clever_format([flops, params], "%.3f")
-    print(params)
-    print(flops)
+    x = torch.randn(1,3,320,320)
+    net(x)
+

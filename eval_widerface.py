@@ -65,8 +65,6 @@ def compute_overlap(a,b):
 def evaluate(val_data,retinaFace,threshold=0.5):
     recall = 0.
     precision = 0.
-    landmark_loss=0
-    miss=0
     #for i, data in tqdm(enumerate(val_data)):
     for data in tqdm(iter(val_data)):
         img_batch = data['img'].cuda()
@@ -76,11 +74,10 @@ def evaluate(val_data,retinaFace,threshold=0.5):
         picked_boxes,picked_landmarks = get_detections(img_batch,retinaFace)
         recall_iter = 0.
         precision_iter = 0.
-        for j, boxes in enumerate(picked_boxes):      
+        for j, boxes in enumerate(picked_boxes):          
             annot_boxes = annots[j]
             annot_boxes = annot_boxes[annot_boxes[:,0]!=-1]
             annot_boxes=annot_boxes[:,:4]
-            annot_land=annot_boxes[:,4:]
             if boxes is None and annot_boxes.shape[0] == 0:
                 continue
             elif boxes is None and annot_boxes.shape[0] != 0:
@@ -104,21 +101,19 @@ def evaluate(val_data,retinaFace,threshold=0.5):
             mask = max_overlap > threshold
             true_positives = mask.sum().item()
             precision_iter += true_positives/boxes.shape[0]
-        if(len(picked_landmarks)!=1):
-            print("?")
+        landmark_loss=0
+        miss=0
         for i, land in enumerate(picked_landmarks):
-
             annot_land = annots[i]
             annot_land=annot_land[:,4:]
             try:
-                landmark_loss+=torch.sum((annot_land-land)**2).item()/10
+                landmark_loss+=torch.sum((annot_land-land)**2).item()/136
             except:
                 miss+=1
-
         recall += recall_iter/len(picked_boxes)
         precision += precision_iter/len(picked_boxes)
 
-    return recall/len(val_data),precision/len(val_data), landmark_loss/len(val_data)/16,miss
+    return recall/len(val_data),precision/len(val_data),landmark_loss/len(val_data),miss
 
 
 

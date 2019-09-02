@@ -140,7 +140,7 @@ class mobileV1(nn.Module):
                     nn.BatchNorm2d(num_features=256, momentum=0.9),
                     nn.ReLU(inplace=True))
     def forward(self, x):
-        result_=OrderedDict()
+        result=OrderedDict()
         batchsize = x.shape[0]
         # k1=F.interpolate(k,(512,512),mode='nearest')
         x = self.mobilenet0_conv0(x)
@@ -170,19 +170,11 @@ class mobileV1(nn.Module):
         x = self.mobilenet0_conv24(x)
         x = self.mobilenet0_conv25(x)
         x26 = self.mobilenet0_conv26(x)
-        result_[1]=x10
-        result_[2]=x22
-        result_[3]=x26
-        return result_
+        result[1]=x10
+        result[2]=x22
+        result[3]=x26
+        return result
 if __name__ == "__main__":
-    from thop import profile
     net = mobileV1()
-    from thop import profile
-    
-    from thop import clever_format
-    # x = torch.randn(1,3,320,320)
-    input = torch.randn(1, 3, 224, 224)
-    flops, params = profile(net, inputs=(input, ))
-    flops, params = clever_format([flops, params], "%.3f")
-    print(params)
-    print(flops)
+    x = torch.randn(1,3,320,320)
+    print(net)

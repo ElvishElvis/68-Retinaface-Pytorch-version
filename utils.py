@@ -92,7 +92,7 @@ class RegressionTransform(nn.Module):
             self.std_box = std_box
         if std_ldm is None:
             #self.std_ldm = (torch.ones(1,10) * 0.1).cuda()
-            self.std_ldm = (torch.ones(1,10) * 0.1)
+            self.std_ldm = (torch.ones(1,136) * 0.1)
 
     def forward(self,anchors,bbox_deltas,ldm_deltas,img):
         widths  = anchors[:, :, 2] - anchors[:, :, 0]
@@ -121,22 +121,37 @@ class RegressionTransform(nn.Module):
         pred_boxes_y2 = pred_ctr_y + 0.5 * pred_h
 
         pred_boxes = torch.stack([pred_boxes_x1, pred_boxes_y1, pred_boxes_x2, pred_boxes_y2], dim=2)
+        pred_landmarks=[]
 
-        # get predicted landmarks
-        pt0_x = ctr_x + ldm_deltas[:,:,0] * widths
-        pt0_y = ctr_y + ldm_deltas[:,:,1] * heights
-        pt1_x = ctr_x + ldm_deltas[:,:,2] * widths
-        pt1_y = ctr_y + ldm_deltas[:,:,3] * heights
-        pt2_x = ctr_x + ldm_deltas[:,:,4] * widths
-        pt2_y = ctr_y + ldm_deltas[:,:,5] * heights
-        pt3_x = ctr_x + ldm_deltas[:,:,6] * widths
-        pt3_y = ctr_y + ldm_deltas[:,:,7] * heights
-        pt4_x = ctr_x + ldm_deltas[:,:,8] * widths
-        pt4_y = ctr_y + ldm_deltas[:,:,9] * heights
+        for i in range(0,136):  
+            if i %2==0:
+                candidate=ctr_x + ldm_deltas[:,:,i] * widths
+            else:
+                candidate=ctr_y + ldm_deltas[:,:,i] * heights
+            pred_landmarks.append(candidate)
 
-        pred_landmarks = torch.stack([
-            pt0_x, pt0_y, pt1_x, pt1_y, pt2_x, pt2_y, pt3_x, pt3_y, pt4_x,pt4_y
-        ],dim=2)
+        pred_landmarks=torch.stack((pred_landmarks),dim=2)
+
+
+
+
+
+
+        # # get predicted landmarks
+        # pt0_x = ctr_x + ldm_deltas[:,:,0] * widths
+        # pt0_y = ctr_y + ldm_deltas[:,:,1] * heights
+        # pt1_x = ctr_x + ldm_deltas[:,:,2] * widths
+        # pt1_y = ctr_y + ldm_deltas[:,:,3] * heights
+        # pt2_x = ctr_x + ldm_deltas[:,:,4] * widths
+        # pt2_y = ctr_y + ldm_deltas[:,:,5] * heights
+        # pt3_x = ctr_x + ldm_deltas[:,:,6] * widths
+        # pt3_y = ctr_y + ldm_deltas[:,:,7] * heights
+        # pt4_x = ctr_x + ldm_deltas[:,:,8] * widths
+        # pt4_y = ctr_y + ldm_deltas[:,:,9] * heights
+
+        # pred_landmarks = torch.stack([
+        #     pt0_x, pt0_y, pt1_x, pt1_y, pt2_x, pt2_y, pt3_x, pt3_y, pt4_x,pt4_y
+        # ],dim=2)
 
         # clip bboxes and landmarks
         B,C,H,W = img.shape

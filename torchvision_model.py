@@ -10,7 +10,7 @@ from anchors import Anchors
 from utils import RegressionTransform
 import losses
 from mobile import mobileV1
-from mnas import MnasNet
+# from mnas import MnasNet
 
 class ContextModule(nn.Module):
     def __init__(self,in_channels=256):
@@ -275,11 +275,11 @@ class LandmarkHead(nn.Module):
         super(LandmarkHead,self).__init__()
         self.num_anchors=num_anchors
         self.face_rpn_landmark_pred_stride8 = nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=self.num_anchors*10, kernel_size=1, stride=1, padding=0, bias=True))
+                    nn.Conv2d(in_channels=64, out_channels=self.num_anchors*136, kernel_size=1, stride=1, padding=0, bias=True))
         self.face_rpn_landmark_pred_stride16 = nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=self.num_anchors*10, kernel_size=1, stride=1, padding=0, bias=True))
+                    nn.Conv2d(in_channels=64, out_channels=self.num_anchors*136, kernel_size=1, stride=1, padding=0, bias=True))
         self.face_rpn_landmark_pred_stride32= nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=self.num_anchors*10, kernel_size=1, stride=1, padding=0, bias=True))
+                    nn.Conv2d(in_channels=64, out_channels=self.num_anchors*136, kernel_size=1, stride=1, padding=0, bias=True))
 
     def forward(self,x,idx):
         if(idx==0):
@@ -290,7 +290,7 @@ class LandmarkHead(nn.Module):
             out = self.face_rpn_landmark_pred_stride32(x)
         out = out.permute(0,2,3,1)
 
-        return out.contiguous().view(out.shape[0], -1, 10)
+        return out.contiguous().view(out.shape[0], -1, 136)
 
 class RetinaFace(nn.Module):
     def __init__(self,backbone,return_layers,anchor_nums=2):
@@ -324,7 +324,6 @@ class RetinaFace(nn.Module):
         self.bbx=BboxHead().cuda()
         self.ldm=LandmarkHead().cuda()
         self.clls=ClassHead().cuda()
-        self.a=LandmarkHead
 
     # def _make_class_head(self,fpn_num=3,inchannels=64,anchor_num=2):
     #     classhead = nn.ModuleList()
@@ -362,9 +361,9 @@ class RetinaFace(nn.Module):
         #(80**2+40**2+20**2)*num_anchors
         bbox_regressions = torch.cat([self.bbx(feature,idx) for idx, feature in enumerate(features.values())], dim=1)
         ldm_regressions = torch.cat([self.ldm(feature,idx) for idx, feature in enumerate(features.values())], dim=1)
-        classifications = torch.cat([self.clls(feature,idx) for idx, feature in enumerate(features.values())],dim=1)     
+        classifications = torch.cat([self.clls(feature,idx) for idx, feature in enumerate(features.values())],dim=1)
         anchors = self.anchors(img_batch)
-    
+        
         if self.training:
             return self.losslayer(classifications, bbox_regressions,ldm_regressions, anchors, annotations)
         else:
@@ -378,3 +377,7 @@ def create_retinaface(return_layers,backbone_name='resnet50',anchors_num=2,pretr
     model = RetinaFace(backbone,return_layers,anchor_nums=2)
 
     return model
+if __name__ == "__main__":
+    return_layers = {'layer2':1,'layer3':2,'layer4':3}
+    retinaface = create_retinaface(return_layers)
+    print(retinaface)

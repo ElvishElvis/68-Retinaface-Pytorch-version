@@ -76,6 +76,7 @@ class LossLayer(nn.Module):
             annotation = annotation[annotation[:,0] > 0]
             bbox_annotation = annotation[:,:4]
             ldm_annotation = annotation[:,4:]
+            
 
             if bbox_annotation.shape[0] == 0:
                 bbox_regression_losses.append(torch.tensor(0.,requires_grad=True).cuda())
@@ -99,7 +100,6 @@ class LossLayer(nn.Module):
             negative_indices = torch.lt(IoU_max, 0.3)
             targets[negative_indices, :] = 0
             targets[negative_indices, 1] = 1
-
             # those whose iou>0.5 have object
             positive_indices = torch.ge(IoU_max, 0.5)
 
@@ -122,6 +122,7 @@ class LossLayer(nn.Module):
             # ldm_positive_indices = torch.ge(f_IoU_max, 0.5)
             
             ldm_sum = ldm_assigned_annotations.sum(dim=1)
+            
             ge0_mask = ldm_sum > 0
             ldm_positive_indices = ge0_mask & positive_indices
 
@@ -189,7 +190,6 @@ class LossLayer(nn.Module):
                 bbox_regression_losses.append(bbox_regression_loss)
             else:
                 bbox_regression_losses.append(torch.tensor(0.,requires_grad=True).cuda())  
-
             # compute landmarks loss
             if ldm_positive_indices.sum() > 0 :
                 ldm_assigned_annotations = ldm_assigned_annotations[ldm_positive_indices, :]
@@ -197,45 +197,26 @@ class LossLayer(nn.Module):
                 anchor_widths_l = anchor_widths[ldm_positive_indices]
                 anchor_heights_l = anchor_heights[ldm_positive_indices]
                 anchor_ctr_x_l = anchor_ctr_x[ldm_positive_indices]
-                anchor_ctr_y_l = anchor_ctr_y[ldm_positive_indices]             
-
-                l0_x = (ldm_assigned_annotations[:,0] - anchor_ctr_x_l) / (anchor_widths_l + 1e-14)
-                l0_y = (ldm_assigned_annotations[:,1] - anchor_ctr_y_l) / (anchor_heights_l + 1e-14)
-                l1_x = (ldm_assigned_annotations[:,2] - anchor_ctr_x_l) / (anchor_widths_l + 1e-14)
-                l1_y = (ldm_assigned_annotations[:,3] - anchor_ctr_y_l) / (anchor_heights_l + 1e-14)
-                l2_x = (ldm_assigned_annotations[:,4] - anchor_ctr_x_l) / (anchor_widths_l + 1e-14)
-                l2_y = (ldm_assigned_annotations[:,5] - anchor_ctr_y_l) / (anchor_heights_l + 1e-14)
-                l3_x = (ldm_assigned_annotations[:,6] - anchor_ctr_x_l) / (anchor_widths_l + 1e-14)
-                l3_y = (ldm_assigned_annotations[:,7] - anchor_ctr_y_l) / (anchor_heights_l + 1e-14)
-                l4_x = (ldm_assigned_annotations[:,8] - anchor_ctr_x_l) / (anchor_widths_l + 1e-14)
-                l4_y = (ldm_assigned_annotations[:,9] - anchor_ctr_y_l) / (anchor_heights_l + 1e-14)
-
-                ldm_targets = torch.stack((l0_x,l0_y,l1_x,l1_y,l2_x,l2_y,l3_x,l3_y,l4_x,l4_y))
+                anchor_ctr_y_l = anchor_ctr_y[ldm_positive_indices]
+                ldm_targets=[]
+                for i in range(0,136):  
+                    if i %2==0:
+                        candidate=(ldm_assigned_annotations[:,i] - anchor_ctr_x_l) / (anchor_widths_l + 1e-14)
+                    else:
+                        candidate=(ldm_assigned_annotations[:,i] - anchor_ctr_y_l) / (anchor_heights_l + 1e-14)
+                ldm_targets.append(candidate)
+                ldm_targets=torch.stack((ldm_targets))
                 ldm_targets = ldm_targets.t()
 
                 # Rescale
-                scale = torch.ones(1,10)*0.1
+                scale = torch.ones(1,136)*0.1
                 ldm_targets = ldm_targets/scale.cuda()
 
                 ldm_regression_loss = self.smoothl1(ldm_targets, ldm_regression[ldm_positive_indices, :])
-                #####
-                l0x=l0_x.mean()
-                l1x=l1_x.mean()
-                l2x=l2_x.mean()
-                l1y=l1_y.mean()
-                l2y=l2_y.mean()
-                l3y=l3_y.mean()
-
-                if(abs(int(l0x-l2x))>3*(abs(int(l1x-l2x))) or abs(int(l1x-l2x))>3*(abs(int(l0x-l2_x.mean()))) or\
-                    abs(int(l1y-l2y))>3*(abs(int(l3y-l2y))) or \
-                        abs(int(l3y-l2y))>3*(abs(int(l1y-l2y))) ):
-                    ldm_regression_loss*=200
-
-
                 ldm_regression_losses.append(ldm_regression_loss)
             else:
                 ldm_regression_losses.append(torch.tensor(0.,requires_grad=True).cuda())
-
+        
         return torch.stack(classification_losses), torch.stack(bbox_regression_losses),torch.stack(ldm_regression_losses)
         #return positive_indices_list, torch.stack(classification_losses), torch.stack(bbox_regression_losses),torch.stack(ldm_regression_losses)
 
