@@ -5,9 +5,13 @@ import torch.nn as nn
 import os
 from tqdm import tqdm
 import torchvision.ops as ops
-
+import cv2
+import time
 def get_detections(img_batch, model,score_threshold=0.5, iou_threshold=0.5):
+    start=time.time()
     model.eval()
+    model.cuda()
+    img_batch.cuda()
     with torch.no_grad():
         #[1,16800,2]
         classifications, bboxes, landmarks = model(img_batch)
@@ -41,6 +45,7 @@ def get_detections(img_batch, model,score_threshold=0.5, iou_threshold=0.5):
             keep_landmarks = landmark[keep]
             picked_boxes.append(keep_boxes)
             picked_landmarks.append(keep_landmarks)
+        print(time.time()-start)
         return picked_boxes, picked_landmarks
 
 def compute_overlap(a,b):
@@ -65,7 +70,11 @@ def compute_overlap(a,b):
 def evaluate(val_data,retinaFace,threshold=0.5):
     recall = 0.
     precision = 0.
+    landmark_loss=0
+    miss=0
     #for i, data in tqdm(enumerate(val_data)):
+    resssss=[]
+    count=0
     for data in tqdm(iter(val_data)):
         img_batch = data['img'].cuda()
         annots = data['annot'].cuda()
@@ -74,10 +83,11 @@ def evaluate(val_data,retinaFace,threshold=0.5):
         picked_boxes,picked_landmarks = get_detections(img_batch,retinaFace)
         recall_iter = 0.
         precision_iter = 0.
-        for j, boxes in enumerate(picked_boxes):          
+        for j, boxes in enumerate(picked_boxes):      
             annot_boxes = annots[j]
             annot_boxes = annot_boxes[annot_boxes[:,0]!=-1]
             annot_boxes=annot_boxes[:,:4]
+            annot_land=annot_boxes[:,4:]
             if boxes is None and annot_boxes.shape[0] == 0:
                 continue
             elif boxes is None and annot_boxes.shape[0] != 0:
@@ -101,19 +111,37 @@ def evaluate(val_data,retinaFace,threshold=0.5):
             mask = max_overlap > threshold
             true_positives = mask.sum().item()
             precision_iter += true_positives/boxes.shape[0]
-        landmark_loss=0
-        miss=0
+        if (picked_landmarks==None):
+            continue
         for i, land in enumerate(picked_landmarks):
+
             annot_land = annots[i]
             annot_land=annot_land[:,4:]
+            # img_batch=np.array(img_batch[0].cpu()).transpose(1,2,0)
             try:
-                landmark_loss+=torch.sum((annot_land-land)**2).item()/136
+                
+                land=land[0,:]
+                landmark_loss=torch.mean(torch.sqrt(torch.sum((annot_land - land)**2)))
+                offset=abs(int(annot_land[0][40])-int(annot_land[0][48]))
+                # landmark_loss=nn.SmoothL1Loss()(annot_land,land)
+                landmark_loss=int(landmark_loss/offset)
+                if landmark_loss<10:
+                    resssss.append(landmark_loss)
+                # annot_land=np.array(annot_land[0].cpu())
+                # land=np.array(land.cpu())
+                # for kkk in range(0,136,2):
+                #     img_batch=cv2.circle(img_batch,(annot_land[kkk],annot_land[kkk+1]),radius=1,color=(0,0,255),thickness=2)
+                #     img_batch=cv2.circle(img_batch,(land[kkk],land[kkk+1]),radius=1,color=(0,255,0),thickness=2)
+                # cv2.imwrite('{}.jpg'.format(count),img_batch)
+                # count+=1
+                # landmark_loss+=torch.mean((annot_land-land)**2).item()
             except:
+                # print('miss')
                 miss+=1
+            
         recall += recall_iter/len(picked_boxes)
         precision += precision_iter/len(picked_boxes)
-
-    return recall/len(val_data),precision/len(val_data),landmark_loss/len(val_data),miss
+    return recall/len(val_data),precision/len(val_data), np.mean(resssss) ,miss
 
 
 

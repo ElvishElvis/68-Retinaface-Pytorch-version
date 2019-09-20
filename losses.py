@@ -1,7 +1,52 @@
 import numpy as numpy
 import torch.nn as nn
 import torch
+import math
+# torch.log  and math.log is e based
+class WingLoss(nn.Module):
+    def __init__(self, omega=3, epsilon=2):
+        super(WingLoss, self).__init__()
+        self.omega = omega
+        self.epsilon = epsilon
 
+    def forward(self, pred, target):
+        y = target
+        y_hat = pred
+        delta_y = (y - y_hat).abs()
+        delta_y1 = delta_y[delta_y < self.omega]
+        delta_y2 = delta_y[delta_y >= self.omega]
+        loss1 = self.omega * torch.log(1 + delta_y1 / self.epsilon)
+        C = self.omega - self.omega * math.log(1 + self.omega / self.epsilon)
+        loss2 = delta_y2 - C
+        return (loss1.sum() + loss2.sum()) / (len(loss1) + len(loss2))
+class AdaptiveWingLoss(nn.Module):
+    def __init__(self, omega=14, theta=0.5, epsilon=1, alpha=2.1):
+        super(AdaptiveWingLoss, self).__init__()
+        self.omega = omega
+        self.theta = theta
+        self.epsilon = epsilon
+        self.alpha = alpha
+
+    def forward(self, pred, target):
+        '''
+        :param pred: BxNxHxH
+        :param target: BxNxHxH
+        :return:
+        '''
+
+        y = target
+        y_hat = pred
+        delta_y = (y - y_hat).abs()
+        delta_y1 = delta_y[delta_y < self.theta]
+        delta_y2 = delta_y[delta_y >= self.theta]
+        y1 = y[delta_y < self.theta]
+        y2 = y[delta_y >= self.theta]
+        loss1 = self.omega * torch.log(1 + torch.pow(delta_y1 / self.omega, self.alpha - y1))
+        A = self.omega * (1 / (1 + torch.pow(self.theta / self.epsilon, self.alpha - y2))) * (self.alpha - y2) * (
+            torch.pow(self.theta / self.epsilon, self.alpha - y2 - 1)) * (1 / self.epsilon)
+        C = self.theta * A - self.omega * torch.log(1 + torch.pow(self.theta / self.epsilon, self.alpha - y2))
+        loss2 = A * delta_y2 - C
+        return (loss1.sum() + loss2.sum()) / (len(loss1) + len(loss2))
 def calc_iou(a, b):
     area = (b[:, 2] - b[:, 0]) * (b[:, 3] - b[:, 1])
 
@@ -76,7 +121,6 @@ class LossLayer(nn.Module):
             annotation = annotation[annotation[:,0] > 0]
             bbox_annotation = annotation[:,:4]
             ldm_annotation = annotation[:,4:]
-            
 
             if bbox_annotation.shape[0] == 0:
                 bbox_regression_losses.append(torch.tensor(0.,requires_grad=True).cuda())
@@ -100,8 +144,9 @@ class LossLayer(nn.Module):
             negative_indices = torch.lt(IoU_max, 0.3)
             targets[negative_indices, :] = 0
             targets[negative_indices, 1] = 1
+
             # those whose iou>0.5 have object
-            positive_indices = torch.ge(IoU_max, 0.5)
+            positive_indices = torch.ge(IoU_max, 0.7)
 
             #temp
             positive_indices_list.append(positive_indices)
@@ -122,7 +167,6 @@ class LossLayer(nn.Module):
             # ldm_positive_indices = torch.ge(f_IoU_max, 0.5)
             
             ldm_sum = ldm_assigned_annotations.sum(dim=1)
-            
             ge0_mask = ldm_sum > 0
             ldm_positive_indices = ge0_mask & positive_indices
 
@@ -190,6 +234,7 @@ class LossLayer(nn.Module):
                 bbox_regression_losses.append(bbox_regression_loss)
             else:
                 bbox_regression_losses.append(torch.tensor(0.,requires_grad=True).cuda())  
+
             # compute landmarks loss
             if ldm_positive_indices.sum() > 0 :
                 ldm_assigned_annotations = ldm_assigned_annotations[ldm_positive_indices, :]
@@ -204,19 +249,21 @@ class LossLayer(nn.Module):
                         candidate=(ldm_assigned_annotations[:,i] - anchor_ctr_x_l) / (anchor_widths_l + 1e-14)
                     else:
                         candidate=(ldm_assigned_annotations[:,i] - anchor_ctr_y_l) / (anchor_heights_l + 1e-14)
-                ldm_targets.append(candidate)
+                    ldm_targets.append(candidate)
                 ldm_targets=torch.stack((ldm_targets))
                 ldm_targets = ldm_targets.t()
 
                 # Rescale
                 scale = torch.ones(1,136)*0.1
                 ldm_targets = ldm_targets/scale.cuda()
-
-                ldm_regression_loss = self.smoothl1(ldm_targets, ldm_regression[ldm_positive_indices, :])
+                # increase the weight for lips
+                s1 = torch.ones(1,99)
+                s2 = torch.ones(1,37)*3
+                s=torch.cat([s1,s2],dim=-1).cuda()
+                aaaaaaa=WingLoss()
+                ldm_regression_loss = self.smoothl1(ldm_targets*s, ldm_regression[ldm_positive_indices, :]*s)
                 ldm_regression_losses.append(ldm_regression_loss)
             else:
                 ldm_regression_losses.append(torch.tensor(0.,requires_grad=True).cuda())
-        
-        return torch.stack(classification_losses), torch.stack(bbox_regression_losses),torch.stack(ldm_regression_losses)
-        #return positive_indices_list, torch.stack(classification_losses), torch.stack(bbox_regression_losses),torch.stack(ldm_regression_losses)
 
+        return torch.stack(classification_losses), torch.stack(bbox_regression_losses),torch.stack(ldm_regression_losses)
