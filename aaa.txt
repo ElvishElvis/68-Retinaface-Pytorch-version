@@ -1,0 +1,18 @@
+-------- RetinaFace Pytorch --------
+Evaluating epoch 0
+total_loss:0.711560070514679
+classification0.7002484798431396
+bbox0.07069661468267441
+landmarks0.4241916835308075
+-------- RetinaFace Pytorch --------
+Evaluating epoch 0
+total_loss:1.137249231338501
+classification1.0966918468475342
+bbox0.19439250230789185
+landmarks0.42236417531967163
+-------- RetinaFace Pytorch --------(not pretrain)
+Evaluating epoch 0
+Recall:0.42436305732484075
+Precision:0.001999636050410273
+landmark: 2564.964
+miss: 0

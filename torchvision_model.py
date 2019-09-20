@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn as nn
 import torchvision.models.detection.backbone_utils as backbone_utils
@@ -10,7 +9,6 @@ from anchors import Anchors
 from utils import RegressionTransform
 import losses
 from mobile import mobileV1
-from mnas import MnasNet
 
 class ContextModule(nn.Module):
     def __init__(self,in_channels=256):
@@ -53,194 +51,68 @@ class ContextModule(nn.Module):
 
 class FeaturePyramidNetwork(nn.Module):
     def __init__(self,in_channels_list,out_channels):
-        super(FeaturePyramidNetwork, self).__init__()
-        self.rf_c3_lateral = nn.Sequential(
-                    nn.Conv2d(in_channels=256, out_channels=64, kernel_size=1, stride=1, padding=0, bias=True),
-                    nn.BatchNorm2d(num_features=64, eps=2e-05, momentum=0.9),
-                    nn.ReLU(inplace=True))
+        super(FeaturePyramidNetwork,self).__init__()
+        self.lateral_blocks = nn.ModuleList()
+        self.context_blocks = nn.ModuleList()
+        self.aggr_blocks = nn.ModuleList()
+        for i, in_channels in enumerate(in_channels_list):
+            if in_channels == 0:
+                continue
+            lateral_block_module = nn.Sequential(
+                nn.Conv2d(in_channels,out_channels,kernel_size=1,stride=1,padding=0),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU(inplace=True)
+            )
+            aggr_block_module = nn.Sequential(
+                nn.Conv2d(out_channels,out_channels,kernel_size=3,stride=1,padding=1),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU(inplace=True)
+            )
+            context_block_module = ContextModule(out_channels)
+            self.lateral_blocks.append(lateral_block_module)
+            self.context_blocks.append(context_block_module)
+            if i > 0 :
+                self.aggr_blocks.append(aggr_block_module)
 
-        self.rf_c3_det_conv1 = nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=32, kernel_size=3, stride=1, padding=1, bias=True),
-                    nn.BatchNorm2d(num_features=32, eps=2e-05, momentum=0.9))
+        # initialize params of fpn layers
+        for m in self.modules():
+            if isinstance(m,nn.Conv2d):
+                nn.init.kaiming_uniform_(m.weight, a=1)
+                nn.init.constant_(m.bias, 0)                
 
-        self.rf_c3_det_context_conv1 = nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=16, kernel_size=3, stride=1, padding=1, bias=True),
-                    nn.BatchNorm2d(num_features=16, eps=2e-05, momentum=0.9),
-                    nn.ReLU(inplace=True))
+    def forward(self,x):
+        names = list(x.keys())
+        x = list(x.values())
 
-        self.rf_c3_det_context_conv2 = nn.Sequential(
-                    nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3, stride=1, padding=1, bias=True),
-                    nn.BatchNorm2d(num_features=16, eps=2e-05, momentum=0.9),
-                    nn.ReLU(inplace=True))
-
-        self.rf_c3_det_context_conv3_1 = nn.Sequential(
-                    nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3, stride=1, padding=1, bias=True),
-                    nn.BatchNorm2d(num_features=16, eps=2e-05, momentum=0.9),
-                    nn.ReLU(inplace=True))
-
-        self.rf_c3_det_context_conv3_2 = nn.Sequential(
-                    nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3, stride=1, padding=1, bias=True),
-                    nn.BatchNorm2d(num_features=16, eps=2e-05, momentum=0.9),
-                    nn.ReLU(inplace=True))
-
-        self.rf_c3_det_concat_relu = nn.Sequential(
-                    nn.ReLU(inplace=True))
-
-        self.rf_c2_lateral = nn.Sequential(
-                    nn.Conv2d(in_channels=128, out_channels=64, kernel_size=1, stride=1, padding=0, bias=True),
-                    nn.BatchNorm2d(num_features=64),
-                    nn.ReLU(inplace=True))
-
-        self.rf_c3_upsampling = nn.Sequential(
-                    nn.Upsample(scale_factor=2, mode='nearest'))
-
-        self.rf_c2_aggr = nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1, bias=True),
-                    nn.BatchNorm2d(num_features=64, eps=2e-05, momentum=0.9),
-                    nn.ReLU(inplace=True))
-
-        self.rf_c2_det_conv1 = nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=32, kernel_size=3, stride=1, padding=1, bias=True),
-                    nn.BatchNorm2d(num_features=32, eps=2e-05, momentum=0.9))
-        
-        self.rf_c2_det_context_conv1 = nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=16, kernel_size=3, stride=1, padding=1, bias=True),
-                    nn.BatchNorm2d(num_features=16, eps=2e-05, momentum=0.9),
-                    nn.ReLU(inplace=True))
-
-        self.rf_c2_det_context_conv2 = nn.Sequential(
-                    nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3, stride=1, padding=1, bias=True),
-                    nn.BatchNorm2d(num_features=16, eps=2e-05, momentum=0.9))
-
-        self.rf_c2_det_context_conv3_1 = nn.Sequential(
-                    nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3, stride=1, padding=1, bias=True),
-                    nn.BatchNorm2d(num_features=16, eps=2e-05, momentum=0.9),
-                    nn.ReLU(inplace=True))
-        
-        self.rf_c2_det_context_conv3_2 = nn.Sequential(
-                    nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3, stride=1, padding=1, bias=True),
-                    nn.BatchNorm2d(num_features=16, eps=2e-05, momentum=0.9))
-
-        self.rf_c2_det_concat_relu = nn.Sequential(
-                    nn.ReLU(inplace=True))
-
-        self.rf_c1_red_conv = nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=64, kernel_size=1, stride=1, padding=0, bias=True),
-                    nn.BatchNorm2d(num_features=64, eps=2e-05, momentum=0.9),
-                    nn.ReLU(inplace=True))
-
-        self.rf_c2_upsampling = nn.Sequential(
-                    nn.Upsample(scale_factor=2, mode='nearest'))
-
-        self.rf_c1_aggr = nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1, bias=True),
-                    nn.BatchNorm2d(num_features=64, eps=2e-05, momentum=0.9),
-                    nn.ReLU(inplace=True))
-
-        self.rf_c1_det_conv1 = nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=32, kernel_size=3, stride=1, padding=1, bias=True),
-                    nn.BatchNorm2d(num_features=32, eps=2e-05, momentum=0.9))
-        
-        self.rf_c1_det_context_conv1 = nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=16, kernel_size=3, stride=1, padding=1, bias=True),
-                    nn.BatchNorm2d(num_features=16, eps=2e-05, momentum=0.9),
-                    nn.ReLU(inplace=True))
-
-        self.rf_c1_det_context_conv2 = nn.Sequential(
-                    nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3, stride=1, padding=1, bias=True),
-                    nn.BatchNorm2d(num_features=16, eps=2e-05, momentum=0.9))
-
-        self.rf_c1_det_context_conv3_1 = nn.Sequential(
-                    nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3, stride=1, padding=1, bias=True),
-                    nn.BatchNorm2d(num_features=16, eps=2e-05, momentum=0.9),
-                    nn.ReLU(inplace=True))
-        
-        self.rf_c1_det_context_conv3_2 = nn.Sequential(
-                    nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3, stride=1, padding=1, bias=True),
-                    nn.BatchNorm2d(num_features=16, eps=2e-05, momentum=0.9))
-
-        self.rf_c1_det_concat_relu = nn.Sequential(
-                    nn.ReLU(inplace=True))
-
-        
-
-    def forward(self,x_dict):
-        names = list(x_dict.keys())
-        result=[]
-
-
-        #the plane of shape 256,256 (x26)
-        x26=x_dict[3]
-        o1 = self.rf_c3_lateral(x26)
-        o2 = self.rf_c3_det_conv1(o1)
-        o3 = self.rf_c3_det_context_conv1(o1)
-        o4 = self.rf_c3_det_context_conv2(o3)
-        o5 = self.rf_c3_det_context_conv3_1(o3)
-        o6 = self.rf_c3_det_context_conv3_2(o5)
-        o7 = torch.cat((o2, o4, o6), 1)
-        o8 = self.rf_c3_det_concat_relu(o7)
-
-
-        #the plane of shape 128,128 (x22)
-
-        x22=x_dict[2]
-        p1 = self.rf_c2_lateral(x22)
-        p2 = self.rf_c3_upsampling(o1)
-        p2 = F.adaptive_avg_pool2d(p2, (p1.shape[2], p1.shape[3])) 
-        p3 = p1 + p2
-        p4 = self.rf_c2_aggr(p3)
-        p5 = self.rf_c2_det_conv1(p4)
-        p6 = self.rf_c2_det_context_conv1(p4)
-        p7 = self.rf_c2_det_context_conv2(p6)
-        p8 = self.rf_c2_det_context_conv3_1(p6)
-        p9 = self.rf_c2_det_context_conv3_2(p8)
-        p10 = torch.cat((p5, p7, p9), 1)
-        p10 = self.rf_c2_det_concat_relu(p10)
-
-        #the plane of shape 64,64 (x10)
-        x10=x_dict[1]
-        q1 = self.rf_c1_red_conv(x10)
-        q2 = self.rf_c2_upsampling(p4)
-        q2 = F.adaptive_avg_pool2d(q2, (q1.shape[2], q1.shape[3]))
-        q3 = q1 + q2
-        q4 = self.rf_c1_aggr(q3)
-        q5 = self.rf_c1_det_conv1(q4)
-        q6 = self.rf_c1_det_context_conv1(q4)
-        q7 = self.rf_c1_det_context_conv2(q6)
-        q8 = self.rf_c1_det_context_conv3_1(q6)
-        q9 = self.rf_c1_det_context_conv3_2(q8)
-        q10 = torch.cat((q5, q7, q9), 1)
-        q10 = self.rf_c2_det_concat_relu(q10)
-
-
-        result.append(q10)
-        result.append(p10)
-        result.append(o8)
+        last_inner = self.lateral_blocks[-1](x[-1])
+        results = []
+        results.append(self.context_blocks[-1](last_inner))
+        for feature, lateral_block, context_block, aggr_block in zip(
+            x[:-1][::-1], self.lateral_blocks[:-1][::-1], self.context_blocks[:-1][::-1], self.aggr_blocks[::-1]
+            ):
+            if not lateral_block:
+                continue
+            lateral_feature = lateral_block(feature)
+            feat_shape = lateral_feature.shape[-2:]
+            inner_top_down = F.interpolate(last_inner, size=feat_shape, mode="nearest")
+            last_inner = lateral_feature + inner_top_down
+            last_inner = aggr_block(last_inner)
+            results.insert(0, context_block(last_inner))
 
         # make it back an OrderedDict
-        out = OrderedDict([(k, v) for k, v in zip(names, result)])
+        out = OrderedDict([(k, v) for k, v in zip(names, results)])
 
         return out
 
 class ClassHead(nn.Module):
-    def __init__(self,inchannels=64,num_anchors=2):
+    def __init__(self,inchannels=64,num_anchors=3):
         super(ClassHead,self).__init__()
         self.num_anchors = num_anchors
-        self.face_rpn_cls_score_stride8 = nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=self.num_anchors*2, kernel_size=1, stride=1, padding=0, bias=True))
-        self.face_rpn_cls_score_stride16 = nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=self.num_anchors*2, kernel_size=1, stride=1, padding=0, bias=True))
-        self.face_rpn_cls_score_stride32 = nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=self.num_anchors*2, kernel_size=1, stride=1, padding=0, bias=True))
+        self.conv1x1 = nn.Conv2d(inchannels,self.num_anchors*2,kernel_size=(1,1),stride=1,padding=0)
         self.output_act = nn.LogSoftmax(dim=-1)
 
-    def forward(self,x,idx):
-        if(idx==0):
-            out = self.face_rpn_cls_score_stride8(x)
-        if(idx==1):
-            out = self.face_rpn_cls_score_stride16(x)
-        if(idx==2):
-            out = self.face_rpn_cls_score_stride32(x)
+    def forward(self,x):
+        out = self.conv1x1(x)
         out = out.permute(0,2,3,1)
         b, h, w, c = out.shape
         out = out.view(b, h, w, self.num_anchors, 2)
@@ -249,51 +121,32 @@ class ClassHead(nn.Module):
         return out.contiguous().view(out.shape[0], -1, 2)
 
 class BboxHead(nn.Module):
-    def __init__(self,inchannels=64,num_anchors=2):
+    def __init__(self,inchannels=64,num_anchors=3):
         super(BboxHead,self).__init__()
-        self.num_anchors=num_anchors
-        self.face_rpn_bbox_pred_stride8 = nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=self.num_anchors*4, kernel_size=1, stride=1, padding=0, bias=True))
-        self.face_rpn_bbox_pred_stride16 = nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=self.num_anchors*4, kernel_size=1, stride=1, padding=0, bias=True))
-        self.face_rpn_bbox_pred_stride32 = nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=self.num_anchors*4, kernel_size=1, stride=1, padding=0, bias=True))
+        self.conv1x1 = nn.Conv2d(inchannels,num_anchors*4,kernel_size=(1,1),stride=1,padding=0)
 
-    def forward(self,x,idx):
-        if(idx==0):
-            out = self.face_rpn_bbox_pred_stride8(x)
-        if(idx==1):
-            out = self.face_rpn_bbox_pred_stride16(x)
-        if(idx==2):
-            out = self.face_rpn_bbox_pred_stride32(x)
+    def forward(self,x):
+        out = self.conv1x1(x)
         out = out.permute(0,2,3,1)
 
         return out.contiguous().view(out.shape[0], -1, 4)
 
 class LandmarkHead(nn.Module):
-    def __init__(self,inchannels=64,num_anchors=2):
+    def __init__(self,inchannels=64,num_anchors=3):
         super(LandmarkHead,self).__init__()
-        self.num_anchors=num_anchors
-        self.face_rpn_landmark_pred_stride8 = nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=self.num_anchors*10, kernel_size=1, stride=1, padding=0, bias=True))
-        self.face_rpn_landmark_pred_stride16 = nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=self.num_anchors*10, kernel_size=1, stride=1, padding=0, bias=True))
-        self.face_rpn_landmark_pred_stride32= nn.Sequential(
-                    nn.Conv2d(in_channels=64, out_channels=self.num_anchors*10, kernel_size=1, stride=1, padding=0, bias=True))
-
-    def forward(self,x,idx):
-        if(idx==0):
-            out = self.face_rpn_landmark_pred_stride8(x)
-        if(idx==1):
-            out = self.face_rpn_landmark_pred_stride16(x)
-        if(idx==2):
-            out = self.face_rpn_landmark_pred_stride32(x)
+        self.conv1x1 = nn.Conv2d(inchannels,num_anchors*196,kernel_size=(1,1),stride=1,padding=0)
+        # self.conv3x3 = nn.Conv2d(num_anchors*196,num_anchors*196,kernel_size=(3,3),stride=1,padding=1)
+        self.relu=nn.ReLU(inplace=True)
+    def forward(self,x):
+        out = self.conv1x1(x)
+        # out=self.relu(out)
+        # out=self.conv3x3(out)
         out = out.permute(0,2,3,1)
 
-        return out.contiguous().view(out.shape[0], -1, 10)
+        return out.contiguous().view(out.shape[0], -1, 196)
 
 class RetinaFace(nn.Module):
-    def __init__(self,backbone,return_layers,anchor_nums=2):
+    def __init__(self,backbone,return_layers,anchor_nums=3):
         super(RetinaFace,self).__init__()
         # if backbone_name == 'resnet50':
         #     self.backbone = resnet.resnet50(pretrained)
@@ -301,48 +154,49 @@ class RetinaFace(nn.Module):
         # self.return_layers = {'layer1': 0, 'layer2': 1, 'layer3': 2, 'layer4': 3}
         assert backbone,'Backbone can not be none!'
         assert len(return_layers)>0,'There must be at least one return layers'
-        # self.body = _utils.IntermediateLayerGetter(backbone, return_layers)
-        self.body=mobileV1()
-        # self.body=MnasNet()
-        in_channels_stage2 = 64
+        self.body = mobileV1()
+        in_channels_stage2 = 32
+        # in_channels_stage2 = 64
         in_channels_list = [
-            in_channels_stage2,
+            #in_channels_stage2,
             in_channels_stage2 * 2,
-            in_channels_stage2 * 4
+            in_channels_stage2 * 4,
+            in_channels_stage2 * 8,
         ]
-        out_channels = 64
+        out_channels = 32
         self.fpn = FeaturePyramidNetwork(in_channels_list,out_channels)
         # self.ClassHead = ClassHead()
         # self.BboxHead = BboxHead()
         # self.LandmarkHead = LandmarkHead()
-        # self.ClassHead = ClassHead
-        # self.BboxHead = BboxHead
-        # self.LandmarkHead = LandmarkHead
+        self.ClassHead = self._make_class_head()
+        self.BboxHead = self._make_bbox_head()
+        self.LandmarkHead = self._make_landmark_head()
         self.anchors = Anchors()
         self.regressBoxes = RegressionTransform()        
         self.losslayer = losses.LossLayer()
-        self.bbx=BboxHead().cuda()
-        self.ldm=LandmarkHead().cuda()
-        self.clls=ClassHead().cuda()
-        self.a=LandmarkHead
 
-    # def _make_class_head(self,fpn_num=3,inchannels=64,anchor_num=2):
-    #     classhead = nn.ModuleList()
-    #     for i in range(fpn_num):
-    #         classhead.append(ClassHead(inchannels,anchor_num))
-    #     return classhead
+    def _make_class_head(self,fpn_num=3,inchannels=64,anchor_num=3):
+        classhead = nn.ModuleList()
+        for i in range(fpn_num):
+            classhead.append(ClassHead(inchannels,anchor_num))
+        return classhead
     
-    # def _make_bbox_head(self,fpn_num=3,inchannels=64,anchor_num=2):
-    #     bboxhead = nn.ModuleList()
-    #     for i in range(fpn_num):
-    #         bboxhead.append(BboxHead(inchannels,anchor_num))
-    #     return bboxhead
+    def _make_bbox_head(self,fpn_num=3,inchannels=64,anchor_num=3):
+        bboxhead = nn.ModuleList()
+        for i in range(fpn_num):
+            bboxhead.append(BboxHead(inchannels,anchor_num))
+        return bboxhead
 
-    # def _make_landmark_head(self,fpn_num=3,inchannels=64,anchor_num=2):
-    #     landmarkhead = nn.ModuleList()
-    #     for i in range(fpn_num):
-    #         landmarkhead.append(LandmarkHead(inchannels,anchor_num))
-    #     return landmarkhead
+    def _make_landmark_head(self,fpn_num=3,inchannels=64,anchor_num=3):
+        landmarkhead = nn.ModuleList()
+        for i in range(fpn_num):
+            landmarkhead.append(LandmarkHead(inchannels,anchor_num))
+        return landmarkhead
+
+    def freeze_bn(self):
+        for layer in self.modules():
+            if isinstance(layer, nn.BatchNorm2d):
+                layer.eval()
 
     def forward(self,inputs):
         if self.training:
@@ -351,20 +205,17 @@ class RetinaFace(nn.Module):
             img_batch = inputs
 
         out = self.body(img_batch)
-
         features = self.fpn(out)
-
 
         # bbox_regressions = torch.cat([self.BboxHead(feature) for feature in features.values()], dim=1)
         # ldm_regressions = torch.cat([self.LandmarkHead(feature) for feature in features.values()], dim=1)
         # classifications = torch.cat([self.ClassHead(feature) for feature in features.values()],dim=1)      
+        bbox_regressions = torch.cat([self.BboxHead[i](feature) for i, feature in enumerate(features.values())], dim=1)
+        ldm_regressions = torch.cat([self.LandmarkHead[i](feature) for i, feature in enumerate(features.values())], dim=1)
+        classifications = torch.cat([self.ClassHead[i](feature) for i, feature in enumerate(features.values())],dim=1)      
 
-        #(80**2+40**2+20**2)*num_anchors
-        bbox_regressions = torch.cat([self.bbx(feature,idx) for idx, feature in enumerate(features.values())], dim=1)
-        ldm_regressions = torch.cat([self.ldm(feature,idx) for idx, feature in enumerate(features.values())], dim=1)
-        classifications = torch.cat([self.clls(feature,idx) for idx, feature in enumerate(features.values())],dim=1)     
         anchors = self.anchors(img_batch)
-    
+
         if self.training:
             return self.losslayer(classifications, bbox_regressions,ldm_regressions, anchors, annotations)
         else:
@@ -373,8 +224,55 @@ class RetinaFace(nn.Module):
             return classifications, bboxes, landmarks
 
 
-def create_retinaface(return_layers,backbone_name='resnet50',anchors_num=2,pretrained=True):
-    backbone = resnet.__dict__[backbone_name](pretrained=pretrained)
-    model = RetinaFace(backbone,return_layers,anchor_nums=2)
+def create_retinaface(return_layers,backbone_name='resnet50',anchors_num=3,pretrained=True):
+    # backbone = resnet.__dict__[backbone_name](pretrained=pretrained)
+    backbone=1
+    # freeze layer1
+    # for name, parameter in backbone.named_parameters():
+    #     # if 'layer2' not in name and 'layer3' not in name and 'layer4' not in name:
+    #     #     parameter.requires_grad_(False)
+    #     if name == 'conv1.weight':
+    #         # print('freeze first conv layer...')
+    #         parameter.requires_grad_(False)
+
+    model = RetinaFace(backbone,return_layers,anchor_nums=3)
 
     return model
+
+if __name__ == "__main__":
+    from thop import profile
+    return_layers = {'layer2':1,'layer3':2,'layer4':3}
+    net = create_retinaface(return_layers).cuda()
+    torch.save(net.state_dict(),'a.ttt')
+    from thop import profile
+    
+    from thop import clever_format
+    # x = torch.randn(1,3,320,320)
+    input = torch.randn(1, 3, 1024, 1024).cuda()
+    import time
+    net.eval()
+    net.training=False
+    start=time.time()
+    net(input)
+    print(time.time()-start)
+    # flops, params = profile(net, inputs=(input, ))
+    # flops, params = clever_format([flops, params], "%.3f")
+    # print(params)
+    # print(flops)
+
+
+    
+
+
+
+
+        
+
+
+
+
+
+
+        
+
+

@@ -4,31 +4,46 @@ import torch
 class mobileV1(nn.Module):
     def __init__(self):
         super(mobileV1, self).__init__()
-            
-        self.mobilenet0_conv0 = nn.Sequential(
-                    nn.Conv2d(in_channels=3, out_channels=8, kernel_size=3, stride=2, padding=1, bias=False),
-                    nn.BatchNorm2d(num_features=8, momentum=0.9),
-                    nn.ReLU(inplace=True))
 
-        self.mobilenet0_conv1 = nn.Sequential(
-                    nn.Conv2d(in_channels=8, out_channels=8, kernel_size=3, stride=1, padding=1, groups=8, bias=False),
-                    nn.BatchNorm2d(num_features=8, momentum=0.9),
-                    nn.ReLU(inplace=True))
-
-        self.mobilenet0_conv2 = nn.Sequential(
-                    nn.Conv2d(in_channels=8, out_channels=16, kernel_size=1, stride=1, padding=0, bias=False),
-                    nn.BatchNorm2d(num_features=16, momentum=0.9),
-                    nn.ReLU(inplace=True))
-        
-        self.mobilenet0_conv3 = nn.Sequential(
-                    nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3, stride=2, padding=1, groups=16, bias=False),
-                    nn.BatchNorm2d(num_features=16, momentum=0.9),
-                    nn.ReLU(inplace=True))
-
-        self.mobilenet0_conv4 = nn.Sequential(
-                    nn.Conv2d(in_channels=16, out_channels=32, kernel_size=1, stride=1, padding=0, bias=False),
+        self.kkk = nn.Sequential(
+                    nn.Conv2d(in_channels=3, out_channels=32, kernel_size=7, stride=4, padding=2, bias=False),
                     nn.BatchNorm2d(num_features=32, momentum=0.9),
                     nn.ReLU(inplace=True))
+
+
+        # self.mmm = nn.Sequential(
+        #             nn.Conv2d(in_channels=3, out_channels=32, kernel_size=1, stride=1, padding=0, bias=False),
+        #             nn.BatchNorm2d(num_features=32, momentum=0.9),
+        #             nn.ReLU(inplace=True))
+        # self.mmm1 = nn.Sequential(
+        #             nn.Conv2d(in_channels=32, out_channels=32, kernel_size=7, stride=4, padding=2, bias=False),
+        #             nn.BatchNorm2d(num_features=32, momentum=0.9),
+        #             nn.ReLU(inplace=True))
+
+        # self.mobilenet0_conv0 = nn.Sequential(
+        #             nn.Conv2d(in_channels=3, out_channels=8, kernel_size=3, stride=2, padding=1, bias=False),
+        #             nn.BatchNorm2d(num_features=8, momentum=0.9),
+        #             nn.ReLU(inplace=True))
+
+        # self.mobilenet0_conv1 = nn.Sequential(
+        #             nn.Conv2d(in_channels=8, out_channels=8, kernel_size=3, stride=1, padding=1, groups=8, bias=False),
+        #             nn.BatchNorm2d(num_features=8, momentum=0.9),
+        #             nn.ReLU(inplace=True))
+
+        # self.mobilenet0_conv2 = nn.Sequential(
+        #             nn.Conv2d(in_channels=8, out_channels=16, kernel_size=1, stride=1, padding=0, bias=False),
+        #             nn.BatchNorm2d(num_features=16, momentum=0.9),
+        #             nn.ReLU(inplace=True))
+        
+        # self.mobilenet0_conv3 = nn.Sequential(
+        #             nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3, stride=2, padding=1, groups=16, bias=False),
+        #             nn.BatchNorm2d(num_features=16, momentum=0.9),
+        #             nn.ReLU(inplace=True))
+
+        # self.mobilenet0_conv4 = nn.Sequential(
+        #             nn.Conv2d(in_channels=16, out_channels=32, kernel_size=1, stride=1, padding=0, bias=False),
+        #             nn.BatchNorm2d(num_features=32, momentum=0.9),
+        #             nn.ReLU(inplace=True))
 
         self.mobilenet0_conv5 = nn.Sequential(
                     nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, stride=1, padding=1, groups=32, bias=False),
@@ -139,15 +154,19 @@ class mobileV1(nn.Module):
                     nn.Conv2d(in_channels=256, out_channels=256, kernel_size=1, stride=1, padding=0, bias=False),
                     nn.BatchNorm2d(num_features=256, momentum=0.9),
                     nn.ReLU(inplace=True))
+        # self.relu=nn.ReLU(inplace=True)
     def forward(self, x):
         result_=OrderedDict()
         batchsize = x.shape[0]
         # k1=F.interpolate(k,(512,512),mode='nearest')
-        x = self.mobilenet0_conv0(x)
-        x = self.mobilenet0_conv1(x)
-        x = self.mobilenet0_conv2(x)
-        x = self.mobilenet0_conv3(x)
-        x = self.mobilenet0_conv4(x)
+        # x = self.mobilenet0_conv0(x)
+        # x = self.mobilenet0_conv1(x)
+        # x = self.mobilenet0_conv2(x)
+        # x = self.mobilenet0_conv3(x)
+        # x = self.mobilenet0_conv4(x)
+        # x= self.mmm(x)
+        # x= self.mmm1(x)
+        x=self.kkk(x)
         x = self.mobilenet0_conv5(x)
         x = self.mobilenet0_conv6(x)
         x = self.mobilenet0_conv7(x)
@@ -177,6 +196,7 @@ class mobileV1(nn.Module):
 if __name__ == "__main__":
     from thop import profile
     net = mobileV1()
+    torch.save(net.state_dict(),'a.ttt')
     from thop import profile
     
     from thop import clever_format
