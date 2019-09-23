@@ -6,9 +6,9 @@ This is the branch for 68 landmarks detection, the pre-trained model is in ./out
 
 Working on 96 landmarks detection( refer to the other branch)
 
-<p align="center"><img src="assets/1.jpg" width="640"\></p>
-<p align="center"><img src="assets/2.jpg" width="640"\></p>
-<p align="center"><img src="assets/3.jpg" width="640"\></p>
+<p align="center"><img src="assets/1.jpg" width="200"\></p>
+<p align="center"><img src="assets/2.jpg" width="200"\></p>
+<p align="center"><img src="assets/3.jpg" width="200"\></p>
 
 
 
@@ -31,7 +31,6 @@ python3 video_detect.py （ need to delete all 'cuda()', and run locally with a 
 ### Eval Model：
 python3 train.py -train False
 
-后续优化包括使用SBR网络，PFLD网络进行拟single stage的改造
 ## Todo: 
 - [ ] Use SBR and BFLD to improve performance
 
