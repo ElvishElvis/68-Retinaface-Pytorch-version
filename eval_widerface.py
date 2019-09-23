@@ -45,7 +45,7 @@ def get_detections(img_batch, model,score_threshold=0.5, iou_threshold=0.5):
             keep_landmarks = landmark[keep]
             picked_boxes.append(keep_boxes)
             picked_landmarks.append(keep_landmarks)
-        print(time.time()-start)
+        # print(time.time()-start)
         return picked_boxes, picked_landmarks
 
 def compute_overlap(a,b):
@@ -122,10 +122,10 @@ def evaluate(val_data,retinaFace,threshold=0.5):
                 
                 land=land[0,:]
                 landmark_loss=torch.mean(torch.sqrt(torch.sum((annot_land - land)**2)))
-                offset=abs(int(annot_land[0][40])-int(annot_land[0][48]))
+                offset=abs(int(annot_land[0][4])-int(annot_land[0][68]))
                 # landmark_loss=nn.SmoothL1Loss()(annot_land,land)
-                landmark_loss=int(landmark_loss/offset)
-                if landmark_loss<10:
+                landmark_loss=float(landmark_loss/offset)
+                if landmark_loss<1:
                     resssss.append(landmark_loss)
                 # annot_land=np.array(annot_land[0].cpu())
                 # land=np.array(land.cpu())
@@ -141,6 +141,7 @@ def evaluate(val_data,retinaFace,threshold=0.5):
             
         recall += recall_iter/len(picked_boxes)
         precision += precision_iter/len(picked_boxes)
+    print(sorted(resssss))
     return recall/len(val_data),precision/len(val_data), np.mean(resssss) ,miss
 
 

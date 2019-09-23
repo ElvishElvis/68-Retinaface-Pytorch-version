@@ -28,8 +28,8 @@ class TrainDataset(Dataset):
     def __len__(self):
         # return len(self.name_list)   
         # return 10
-        return 22995
-        # return 200
+        # return 22995
+        return 1000
         # return 10
 
     def __getitem__(self,index):
@@ -269,7 +269,7 @@ class Color(object):
 
 
 class Resizer(object):
-    def __init__(self,input_size=None):
+    def __init__(self,input_size=640):
         if input_size==None:
             self.input_size=None
         else:

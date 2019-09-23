@@ -72,19 +72,19 @@ def main(nummmmmm):
     RetinaFace.to(device)
     
     import time
-    start=time.time()
-    dataset_val = ValDataset_CeleB('./widerface/train/label.txt',transform=transforms.Compose([Resizer(640)]))
+
+    dataset_val = TrainDataset('./widerface/train/label.txt',transform=transforms.Compose([Resizer(640),PadToSquare()]))
     # dataset_val = ValDataset('./widerface/train/label.txt')
-    for qq in range(600,700):
+    for qq in range(100,150):
         img=dataset_val[qq]['img']
         # img=cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         # img=skimage.io.imread("/versa/elvishelvis/RetinaFace_Pytorch/CelebA/Img/img_celeba.7z/img_celeba/118{}.jpg".format(str(qq)))
         img = img.permute(2,0,1)
         resized_img = img.float()
-        print(img.shape)
         input_img = resized_img.unsqueeze(0).to(device)
-        
-        picked_boxes, picked_landmarks = eval_widerface.get_detections(input_img, RetinaFace, score_threshold=0.5, iou_threshold=0.3)
+        start=time.time()
+        picked_boxes, picked_landmarks = eval_widerface.get_detections(input_img, RetinaFace, score_threshold=0.9, iou_threshold=0.2)
+        print(time.time()-start)
         # print(picked_boxes)
         np_img = resized_img.cpu().permute(1,2,0).numpy()
         np_img.astype(int)
@@ -100,7 +100,6 @@ def main(nummmmmm):
         image_name = args.image_path.split('/')[-1]
         save_path = os.path.join(args.save_path,image_name)
         cv2.imwrite('./RetinaFace-Pytorch{}.jpg'.format(qq),cv2.resize(img,(640,640)))
-    print(time.time()-start)
 if __name__=='__main__':
     main(10)
 
