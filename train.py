@@ -1,4 +1,3 @@
-
 import argparse
 import numpy as np
 import torch
@@ -30,7 +29,7 @@ def get_args():
     parser.add_argument('--save_step', type=int, default=10, help='Save every save_step epochs')
     parser.add_argument('--eval_step', type=int, default=10, help='Evaluate every eval_step epochs')
     parser.add_argument('--save_path', type=str, default='./out', help='Model save path')
-    parser.add_argument('--depth', help='Resnet depth, must be one of 18, 34, 50, 101, 152', type=int, default=50)
+    parser.add_argument('--training', help='the training mode or not ( True for Training, False for eval', type=bool, default=True)
     args = parser.parse_args()
     print(args)
 
@@ -45,7 +44,6 @@ def main():
     if not os.path.exists(log_path):
         os.mkdir(log_path)
 
-    # # writer = SummaryWriter(log_dir=log_path)
 
     data_path = args.data_path
     # dataset_train = TrainDataset(train_path,transform=transforms.Compose([RandomCroper(),()]))
@@ -67,6 +65,7 @@ def main():
     retinaface = torch.nn.DataParallel(retinaface_).cuda()
     retinaface.training = True
     base_lr=1e-7
+
     # pre_train = torch.load('network.torch')
     # cur=retinaface.state_dict()
     # for k, v in cur.items():
@@ -89,14 +88,14 @@ def main():
                 {'params': params, 'lr': lr}]
                 )
     #evaluation the current model
-        ##
-    print("not pretrain")
-    recall, precision, landmakr,miss= eval_widerface.evaluate(dataloader_val,retinaface)
-    print('Recall:',recall)
-    print('Precision:',precision)
-    print("landmark: ",str(landmakr))
-    print("miss: "+ str(miss))
-    return 
+    if (args.training==False):
+        print("not pretrain")
+        recall, precision, landmakr,miss= eval_widerface.evaluate(dataloader_val,retinaface)
+        print('Recall:',recall)
+        print('Precision:',precision)
+        print("landmark: ",str(landmakr))
+        print("miss: "+ str(miss))
+        return 
     ##
     print('Start to train.')
 
@@ -134,11 +133,6 @@ def main():
                 table = AsciiTable(table_data)
                 log_str +=table.table
                 print(log_str)
-                # write the log to tensorboard
-                # writer.add_scalar('losses:',loss.item(),iteration*args.verbose)
-                # writer.add_scalar('class losses:',classification_loss.item(),iteration*args.verbose)
-                # writer.add_scalar('box losses:',bbox_regression_loss.item(),iteration*args.verbose)
-                # writer.add_scalar('landmark losses:',ldm_regression_loss.item(),iteration*args.verbose)
                 iteration +=1
                 
 
@@ -160,9 +154,7 @@ def main():
             print('Precision:',precision)
             print("landmark: ",str(landmakr))
             print("miss: "+ str(miss))
-
-            # writer.add_scalar('Recall:', recall, epoch*args.eval_step)
-            # writer.add_scalar('Precision:', precision, epoch*args.eval_step)
+            
             with open("aaa.txt", 'a') as f:
                 f.write('-------- RetinaFace Pytorch --------(not pretrain)'+'\n')
                 f.write ('Evaluating epoch {}'.format(epoch)+'\n')
