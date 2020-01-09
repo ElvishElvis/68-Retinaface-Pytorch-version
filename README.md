@@ -1,8 +1,8 @@
 # Retinaface-Pytorch-version
-### Still in process 
+### It's not the best version of my model due to confidentiality
 Thanks to Alvin Yang (https://github.com/supernotman/RetinaFace_Pytorch)
 
-This is the branch for 68 landmarks detection, the pre-trained model is in ./out ( not the best version)
+This is the branch for 68 landmarks detection, the pre-trained model is in ./out 
 
 Working on 96 landmarks detection( refer to the other branch)
 
