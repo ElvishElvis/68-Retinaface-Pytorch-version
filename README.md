@@ -8,6 +8,7 @@ Working on 96 landmarks detection( refer to the other branch)
 
 <p align="center"><img src="assets/1.jpg" width="200"\></p>
 <p align="center"><img src="assets/2.jpg" width="200"\></p>
+This also predicted the occulded part of the landmarks, can hide them if don't want them to show up.
 <p align="center"><img src="assets/3.jpg" width="200"\></p>
 
 
